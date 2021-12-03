@@ -1,8 +1,10 @@
 import sys
+from time import sleep
 
 import pygame
 
 from bullet import Bullet
+from alien import Alien
 
 
 def check_keydown_events(event, ai_settings, screen, ship, bullets):
@@ -13,6 +15,8 @@ def check_keydown_events(event, ai_settings, screen, ship, bullets):
         ship.moving_left = True
     elif event.key == pygame.K_SPACE:
         fire_bullet(ai_settings, screen, ship, bullets)
+    elif event.key == pygame.K_q:
+        sys.exit()
 
 
 def check_keyup_events(event, ship):
@@ -21,7 +25,6 @@ def check_keyup_events(event, ship):
         ship.moving_right = False
     elif event.key == pygame.K_LEFT:
         ship.moving_left = False
-
 
 def check_events(ai_settings, screen, ship, bullets):
     """Проверка нажатий клавиш и мыши."""
@@ -36,32 +39,143 @@ def check_events(ai_settings, screen, ship, bullets):
 
 def fire_bullet(ai_settings, screen, ship, bullets):
     """Стреляет, если лимит неисчерпан."""
-    # Create a new bullet, add to bullets group.
+    # Создаёт новый снаряд, добавляет в группу.
     if len(bullets) < ai_settings.bullets_allowed:
         new_bullet = Bullet(ai_settings, screen, ship)
         bullets.add(new_bullet)
 
 
-def update_screen(ai_settings, screen, ship, bullets):
+def update_screen(ai_settings, screen, ship, aliens, bullets):
     """Обновляет экран."""
     # Перерисовывает экран, если пройден цикл.
     screen.fill(ai_settings.bg_color)
 
-    # Redraw all bullets, behind ship and aliens.
+    # Перерисовывает снаряды позади корабля и пришельцев.
     for bullet in bullets.sprites():
         bullet.draw_bullet()
     ship.blitme()
+    aliens.draw(screen)
 
-    # Make the most recently drawn screen visible.
+    # Делает видимым последний прорисованный экран.
     pygame.display.flip()
 
 
-def update_bullets(bullets):
+def update_bullets(ai_settings, screen, ship, aliens, bullets):
     """Обновляет позиции снарядов и удаляет старые снаряды."""
-    # Update bullet positions.
+    # Обновляет позицию снаряда.
     bullets.update()
 
-    # Get rid of bullets that have disappeared.
+    # Удаляет снаряды, которые пропали.
     for bullet in bullets.copy():
         if bullet.rect.bottom <= 0:
             bullets.remove(bullet)
+
+    check_bullet_alien_collisions(ai_settings, screen, ship, aliens, bullets)
+
+
+def check_bullet_alien_collisions(ai_settings, screen, ship, aliens, bullets):
+    """Проверка на столкновение снаряда с пришельцем."""
+    # Удаляет все снаряды и корабли, которые столкнулись.
+    collisions = pygame.sprite.groupcollide(bullets, aliens, True, True)
+
+    if len(aliens) == 0:
+        # Удаляет выпущенные снаряды, создаёт новый флот пришельцев.
+        bullets.empty()
+        create_fleet(ai_settings, screen, ship, aliens)
+
+
+def check_fleet_edges(ai_settings, aliens):
+    """Проверка, достигли ли пришельцы края экрана и изменение их направление."""
+    for alien in aliens.sprites():
+        if alien.check_edges():
+            change_fleet_direction(ai_settings, aliens)
+            break
+
+
+def change_fleet_direction(ai_settings, aliens):
+    """Изменение направления флота."""
+    for alien in aliens.sprites():
+        alien.rect.y += ai_settings.fleet_drop_speed
+    ai_settings.fleet_direction *= -1
+
+
+def ship_hit(ai_settings, stats, screen, ship, aliens, bullets):
+    """Проверка на уничтожение корабля."""
+    if stats.ships_left > 0:
+        stats.ships_left -= 1
+    else:
+        stats.game_active = False
+
+    # Опустошает список пришельцев и снарядов.
+    aliens.empty()
+    bullets.empty()
+
+    # Создание нового флота и корабля в центре.
+    create_fleet(ai_settings, screen, ship, aliens)
+    ship.center_ship()
+
+    # Пауза.
+    sleep(0.5)
+
+
+def check_aliens_bottom(ai_settings, stats, screen, ship, aliens, bullets):
+    """Проверка, достигли ли пришельцы нижнего края экрана."""
+    screen_rect = screen.get_rect()
+    for alien in aliens.sprites():
+        if alien.rect.bottom >= screen_rect.bottom:
+            # Проигрыш.
+            ship_hit(ai_settings, stats, screen, ship, aliens, bullets)
+            break
+
+
+def update_aliens(ai_settings, stats, screen, ship, aliens, bullets):
+    """Проверка достигли ли пришельцы конца экрана, и обновление позиции всех пришельцев во флоте"""
+    check_fleet_edges(ai_settings, aliens)
+    aliens.update()
+
+    # Проверка на столкновение корабля с пришельцем.
+    if pygame.sprite.spritecollideany(ship, aliens):
+        ship_hit(ai_settings, stats, screen, ship, aliens, bullets)
+
+    # Проверка на касание нижнего края экрана пришельцем.
+    check_aliens_bottom(ai_settings, stats, screen, ship, aliens, bullets)
+
+
+def get_number_aliens_x(ai_settings, alien_width):
+    """Количество пришельцев, помещающихся в ряд флота."""
+    available_space_x = ai_settings.screen_width - 2 * alien_width
+    number_aliens_x = int(available_space_x / (2 * alien_width))
+    return number_aliens_x
+
+
+def get_number_rows(ai_settings, ship_height, alien_height):
+    """Количество рядов пришельцев, помещающихся на экране."""
+    available_space_y = (ai_settings.screen_height -
+                            (3 * alien_height) - ship_height)
+    number_rows = int(available_space_y / (2 * alien_height))
+    return number_rows
+
+
+def create_alien(ai_settings, screen, aliens, alien_number, row_number):
+    """Создание пришельца и добавление его в ряд флота."""
+    alien = Alien(ai_settings, screen)
+    alien_width = alien.rect.width
+    alien.x = alien_width + 2 * alien_width * alien_number
+    alien.rect.x = alien.x
+    alien.rect.y = alien.rect.height + 2 * alien.rect.height * row_number
+    aliens.add(alien)
+
+
+def create_fleet(ai_settings, screen, ship, aliens):
+    """Создание целого флота пришельцев."""
+    # Создание пришельца и нахождение его номера в ряду флота.
+    alien = Alien(ai_settings, screen)
+    number_aliens_x = get_number_aliens_x(ai_settings, alien.rect.width)
+    number_rows = get_number_rows(ai_settings, ship.rect.height,
+                                  alien.rect.height)
+
+    # Создание флота пришельцев.
+    for row_number in range(number_rows):
+        for alien_number in range(number_aliens_x):
+            create_alien(ai_settings, screen, aliens, alien_number,
+                row_number)
