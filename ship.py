@@ -4,6 +4,7 @@ class Ship():
 
     def __init__(self, ai_settings, screen):
         """Инициализирует корабль и задаёт его начальную позицию."""
+        super(Ship, self).__init__()
         self.screen = screen
         self.ai_settings = ai_settings
 

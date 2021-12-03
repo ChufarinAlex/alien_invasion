@@ -35,6 +35,8 @@ def check_events(ai_settings, screen, ship, bullets):
             check_keydown_events(event, ai_settings, screen, ship, bullets)
         elif event.type == pygame.KEYUP:
             check_keyup_events(event, ship)
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
 
 
 def fire_bullet(ai_settings, screen, ship, bullets):
@@ -56,6 +58,8 @@ def update_screen(ai_settings, screen, ship, aliens, bullets):
     ship.blitme()
     aliens.draw(screen)
 
+    sb.show_score()
+
     # Делает видимым последний прорисованный экран.
     pygame.display.flip()
 
@@ -70,19 +74,35 @@ def update_bullets(ai_settings, screen, ship, aliens, bullets):
         if bullet.rect.bottom <= 0:
             bullets.remove(bullet)
 
-    check_bullet_alien_collisions(ai_settings, screen, ship, aliens, bullets)
+    check_bullet_alien_collisions(ai_settings, screen, stats, sb, ship,
+                                  aliens, bullets)
 
+def check_high_score(stats, sb):
+    """Проверка на лучший счёт."""
+    if stats.score > stats.high_score:
+        stats.high_score = stats.score
+        sb.prep_high_score()
 
 def check_bullet_alien_collisions(ai_settings, screen, ship, aliens, bullets):
     """Проверка на столкновение снаряда с пришельцем."""
     # Удаляет все снаряды и корабли, которые столкнулись.
     collisions = pygame.sprite.groupcollide(bullets, aliens, True, True)
 
+    if collisions:
+        for aliens in collisions.values():
+            stats.score += ai_settings.alien_points * len(aliens)
+            sb.prep_score()
+        check_high_score(stats, sb)
+
     if len(aliens) == 0:
         # Удаляет выпущенные снаряды, создаёт новый флот пришельцев.
         bullets.empty()
-        create_fleet(ai_settings, screen, ship, aliens)
+        ai_settings.increase_speed()
 
+        stats.level += 1
+        sb.prep_level()
+
+        create_fleet(ai_settings, screen, ship, aliens)
 
 def check_fleet_edges(ai_settings, aliens):
     """Проверка, достигли ли пришельцы края экрана и изменение их направление."""
@@ -103,9 +123,12 @@ def ship_hit(ai_settings, stats, screen, ship, aliens, bullets):
     """Проверка на уничтожение корабля."""
     if stats.ships_left > 0:
         stats.ships_left -= 1
+
+        sb.prep_ships()
+
     else:
         stats.game_active = False
-
+        pygame.mouse.set_visible(True)
     # Опустошает список пришельцев и снарядов.
     aliens.empty()
     bullets.empty()
