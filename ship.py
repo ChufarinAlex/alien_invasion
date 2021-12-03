@@ -1,6 +1,7 @@
 import pygame
+from pygame.sprite import Sprite
 
-class Ship():
+class Ship(Sprite):
 
     def __init__(self, ai_settings, screen):
         """Инициализирует корабль и задаёт его начальную позицию."""
@@ -16,7 +17,7 @@ class Ship():
         self.rect.bottom = self.screen_rect.bottom
         
         self.center = float(self.rect.centerx)
-        
+
         self.moving_right = False
         self.moving_left = False
 
